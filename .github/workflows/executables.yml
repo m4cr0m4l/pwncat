@@ -1,0 +1,74 @@
+name: Build and Release Executables
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.x'
+
+    - name: Install PyInstaller
+      run: pip install pyinstaller
+
+    - if: runner.os == 'Windows'
+      name: Install UPX
+      run: choco install upx
+
+    - name: Build executable
+      run: |
+        pyinstaller -F \
+          --exclude-module turtle \
+          --exclude-module webbrowser \
+          bin/pwncat
+      shell: bash
+
+    - name: Rename executable
+      run: |
+        if [[ ${{ runner.os }} == "Linux" ]]; then
+          mv dist/pwncat dist/pwncat-linux
+        elif [[ ${{ runner.os }} == "macOS" ]]; then
+          mv dist/pwncat dist/pwncat-macos
+        fi
+      shell: bash
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: pwncat-${{ matrix.os }}
+        path: dist/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download all build artifacts
+      uses: actions/download-artifact@v5
+      with:
+        merge-multiple: true
+
+    - name: List downloaded files
+      run: ls -lh
+
+    - name: Upload executables
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          pwncat.exe
+          pwncat-linux
+          pwncat-macos
+        token: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
